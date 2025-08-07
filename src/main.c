@@ -488,7 +488,7 @@ int main(int argc, const char **argv) {
     char *executable = basename(executable_path);
     if(argc != 4) {
         error_usage:
-        printf("Usage: %s <split/join> <input> <output>\n",executable);
+        printf("Usage: %s <command> <command args>\nCommands:\n    split <input tag> <output dir>\n    join  <input dir> <new tag path>\n",executable);
         return 1;
     }
 
