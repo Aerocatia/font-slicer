@@ -273,6 +273,9 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         *character_out = *character;
         memcpy(buffer_out + sizeof(struct font_character), buffer_in + pixels_offset, pixels_size);
 
+        // Clear stale pixel data offset
+        character_out->pixels_offset = 0;
+
         // Save file
         FILE *file_out;
         file_out = fopen(output_path, "wb");
@@ -392,12 +395,16 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
             current_character->character = byteswap16(character_files[i]);
         }
 
+        // This is always set to the current position, even if there are no pixels
+        current_character->pixels_offset = byteswap32(new_pixel_data_size);
+
         // Copy pixels if we have any.
         if(pixels_size != 0) {
             if(fread(pixel_data_buffer + new_pixel_data_size, pixels_size, 1, file_in) != 1) {
                 fprintf(stderr, "Could not read pixels from %s.\n", path_buffer);
                 return false;
             }
+
             new_pixel_data_size += pixels_size;
         }
 
