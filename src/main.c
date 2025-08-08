@@ -51,6 +51,16 @@ struct tag_reference {
 };
 static_assert(sizeof(struct tag_reference) == 16);
 
+struct font_character_table_entry {
+	uint16_t character_index;
+};
+static_assert(sizeof(struct font_character_table_entry) == 2);
+
+struct font_character_tables_entry {
+	struct tag_reflexive table;
+};
+static_assert(sizeof(struct font_character_tables_entry) == 12);
+
 struct font_character {
 	uint16_t character;
 	int16_t character_width;
@@ -179,7 +189,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     // Open font tag
     file_in = fopen(tag_path, "rb");
     if(!file_in) {
-        fprintf(stderr, "Failed to open %s.\n", tag_path);
+        fprintf(stderr, "Failed to open %s\n", tag_path);
         return false;
     }
 
@@ -188,19 +198,19 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     buffer_in_size = ftell(file_in);
     fseek(file_in, 0, SEEK_SET);
     if(buffer_in_size < sizeof(struct tag_header) + sizeof(struct font_base)) {
-        fprintf(stderr, "%s is too small to be a valid font tag.\n", tag_path);
+        fprintf(stderr, "%s is too small to be a valid font tag\n", tag_path);
         return false;
     }
 
     // Read into buffer
     buffer_in = malloc(buffer_in_size);
     if(!buffer_in) {
-        fprintf(stderr, "Could not allocate %zu bytes.", buffer_in_size);
+        fprintf(stderr, "Could not allocate %zu bytes", buffer_in_size);
         return false;
     }
 
     if(fread(buffer_in, buffer_in_size, 1, file_in) != 1) {
-        fprintf(stderr, "Could not read from %s.\n", tag_path);
+        fprintf(stderr, "Could not read from %s\n", tag_path);
         return false;
     }
 
@@ -219,27 +229,32 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     // do we even have characters?
     uint32_t characters_count = byteswap32(font->characters.count);
     if(characters_count == 0) {
-        fprintf(stderr, "%s has no characters to split.\n", tag_path);
-        return false;
-    }
-
-    // No.
-    if(font->character_tables.count != 0) { // don't need to byteswap for this check
-        fprintf(stderr, "%s has character tables. I don't want to deal with this so please strip the tag with invader first.\n", tag_path);
+        fprintf(stderr, "%s has no characters to split\n", tag_path);
         return false;
     }
 
     // do we have pixel data?
     size_t pixel_data_size = byteswap32(font->pixels.size);
     if(pixel_data_size == 0) {
-        fprintf(stderr, "%s has no pixel data.\n", tag_path);
+        fprintf(stderr, "%s has no pixel data\n", tag_path);
         return false;
     }
 
     // Get the offset to character data
     size_t characters_offset = sizeof(struct tag_header) + sizeof(struct font_base);
 
-    // Add up any paths from the references.
+    // Add size of character tables if they exist
+    uint32_t character_tables_count = byteswap32(font->character_tables.count);
+    if(character_tables_count != 0) {
+        struct font_character_tables_entry *character_tables = (struct font_character_tables_entry *)(buffer_in + characters_offset);
+        for(int i = 0; i < character_tables_count; i++) {
+            characters_offset += byteswap32(character_tables->table.count) * sizeof(struct font_character_table_entry);
+            character_tables++;
+        }
+        characters_offset += character_tables_count * sizeof(struct font_character_tables_entry);
+    }
+
+    // Add up any paths from the references
     for(int i = 0; i < STYLE_FONTS_COUNT; i++) {
         uint32_t name_legnth = byteswap32(font->style_fonts[i].name_length);
         if(name_legnth != 0) {
@@ -250,7 +265,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     // Get the offset to pixel data
     size_t pixel_data_offset = characters_offset + characters_count * sizeof(struct font_character);
     if(buffer_in_size != pixel_data_offset + pixel_data_size) {
-        fprintf(stderr, "%s is fucked.\n", tag_path);
+        fprintf(stderr, "%s is fucked\n", tag_path);
         return false;
     }
 
@@ -305,7 +320,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
     int character_files_count = 0;
     d = opendir(input_dir);
     if(d) {
-        while((dir = readdir(d)) != NULL) {
+        while((dir = readdir(d)) != nullptr) {
             // Exclude "." and ".."
             if(strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
                 int file_value;
@@ -313,7 +328,6 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
                     fprintf(stderr, "%s is not named with format <character number>.bin\n", dir->d_name);
                     return false;
                 }
-
                 if(file_value > UINT16_MAX || file_value < 0) {
                     fprintf(stderr, "%s is out of bounds to be a valid font character\n", dir->d_name);
                     return false;
@@ -355,7 +369,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         snprintf(path_buffer, sizeof(path_buffer), "%s/%d.bin", input_dir, character_files[i]);
         file_in = fopen(path_buffer, "rb");
         if(!file_in) {
-            fprintf(stderr, "Failed to open %s.\n", path_buffer);
+            fprintf(stderr, "Failed to open %s\n", path_buffer);
             return false;
         }
 
@@ -365,20 +379,20 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         fseek(file_in, 0, SEEK_SET);
 
         if(file_in_size < sizeof(struct font_character)) {
-            fprintf(stderr, "%s is too small to be a font character.\n", path_buffer);
+            fprintf(stderr, "%s is too small to be a font character\n", path_buffer);
             return false;
         }
 
         // Read character struct
         if(fread(current_character, sizeof(struct font_character), 1, file_in) != 1) {
-            fprintf(stderr, "Could not read character data from %s.\n", path_buffer);
+            fprintf(stderr, "Could not read character data from %s\n", path_buffer);
             return false;
         }
 
-        // Check remaning file size matches what is expected.
+        // Check remaning file size matches what is expected
         size_t pixels_size = calculate_pixels_size(byteswap16(current_character->bitmap_width), byteswap16(current_character->bitmap_height));
         if(file_in_size != sizeof(struct font_character) + pixels_size) {
-            fprintf(stderr, "%s has an invalid pixel data size.\n", path_buffer);
+            fprintf(stderr, "pixel data size for %s is invalid\n", path_buffer);
             return false;
         }
 
@@ -401,7 +415,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         // Copy pixels if we have any.
         if(pixels_size != 0) {
             if(fread(pixel_data_buffer + new_pixel_data_size, pixels_size, 1, file_in) != 1) {
-                fprintf(stderr, "Could not read pixels from %s.\n", path_buffer);
+                fprintf(stderr, "Could not read pixels from %s\n", path_buffer);
                 return false;
             }
 
@@ -410,8 +424,8 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
 
         fclose(file_in);
 
-        // Approximate. Will match invader-font, but tool.exe uses values directly from Windows.
-        // These can be adjusted after the fact anyway.
+        // Approximate. Will match invader-font, but tool.exe uses values directly from Windows
+        // These can be adjusted after the fact anyway
         int16_t descending_height = byteswap16(current_character->bitmap_height) - byteswap16(current_character->bitmap_origin_y);
         int16_t ascending_height = byteswap16(current_character->bitmap_height) - descending_height;
         if(ascending_height > max_ascending_height) {
@@ -505,7 +519,7 @@ int main(int argc, const char **argv) {
 
     bool success = false;
 
-    // Check what mode
+    // Check what command
     if(strcmp(command, "split") == 0) {
         success = split_font_tag(input, output);
     }
