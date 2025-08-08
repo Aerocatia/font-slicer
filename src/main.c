@@ -240,6 +240,12 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         return false;
     }
 
+    // do we have too many characters?
+    if(characters_count > UINT16_MAX) {
+        fprintf(stderr, "%s has too many characters to be a valid font tag\n", tag_path);
+        return false;
+    }
+
     // do we have pixel data?
     size_t pixel_data_size = byteswap32(font->pixels.size);
     if(pixel_data_size == 0) {
@@ -247,30 +253,38 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         return false;
     }
 
-    // Get the offset to character data
-    size_t characters_offset = sizeof(struct tag_header) + sizeof(struct font_base);
+    // Start going through the rest of the tag data
+    size_t font_tag_cursor = sizeof(struct tag_header) + sizeof(struct font_base);
 
     // Add size of character tables if they exist
     uint32_t character_tables_count = byteswap32(font->character_tables.count);
     if(character_tables_count != 0) {
-        struct font_character_tables_entry *character_tables = (struct font_character_tables_entry *)(buffer_in + characters_offset);
+        size_t character_tables_size = character_tables_count * sizeof(struct font_character_tables_entry);
+        if(buffer_in_size < font_tag_cursor + character_tables_size) {
+            fprintf(stderr, "%s has character tables that are out of bounds\n", tag_path);
+            return false;
+        }
+        struct font_character_tables_entry *character_tables = (struct font_character_tables_entry *)(buffer_in + font_tag_cursor);
         for(int i = 0; i < character_tables_count; i++) {
-            characters_offset += byteswap32(character_tables->table.count) * sizeof(struct font_character_table_entry);
+            font_tag_cursor += byteswap32(character_tables->table.count) * sizeof(struct font_character_table_entry);
             character_tables++;
         }
-        characters_offset += character_tables_count * sizeof(struct font_character_tables_entry);
+        font_tag_cursor += character_tables_size;
     }
 
     // Add up any paths from the references
     for(int i = 0; i < STYLE_FONTS_COUNT; i++) {
         uint32_t name_legnth = byteswap32(font->style_fonts[i].name_length);
         if(name_legnth != 0) {
-            characters_offset += name_legnth + 1;
+            font_tag_cursor += name_legnth + 1;
         }
     }
 
-    // Get the offset to pixel data
-    size_t pixel_data_offset = characters_offset + characters_count * sizeof(struct font_character);
+    // Offset to character data
+    size_t characters_offset = font_tag_cursor;
+
+    // Offset to pixel data
+    size_t pixel_data_offset = font_tag_cursor + characters_count * sizeof(struct font_character);
     if(buffer_in_size != pixel_data_offset + pixel_data_size) {
         fprintf(stderr, "%s is fucked\n", tag_path);
         return false;
@@ -291,9 +305,16 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
 
     // Go through each character and dump tag data + pixel data to a file
     static char output_path[512];
+    static bool seen[UINT16_MAX] = {false};
     struct font_character *character = (struct font_character *)(buffer_in + characters_offset);
     for(int i = 0; i < characters_count; i++) {
-        snprintf(output_path, sizeof(output_path), "%s/%u.bin", output_dir, byteswap16(character->character));
+        uint16_t character_type = byteswap16(character->character);
+        if(seen[character_type]) {
+            fprintf(stderr, "Warning: skipped extracting duplicate character %u at index %d\n", character_type, i);
+            continue;
+        }
+        seen[character_type] = true;
+        snprintf(output_path, sizeof(output_path), "%s/%u.bin", output_dir, character_type);
         size_t pixels_size = calculate_pixels_size(byteswap16(character->bitmap_width), byteswap16(character->bitmap_height));
         size_t pixels_offset = pixel_data_offset + byteswap32(character->pixels_offset);
         if(pixels_size > pixel_data_size) {
@@ -336,7 +357,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
 static bool produce_font_tag_from_bullshit(const char *input_dir, const char *output_path) {
     DIR *d;
     struct dirent *dir;
-    uint16_t character_files[UINT16_MAX];
+    static uint16_t character_files[UINT16_MAX];
     int character_files_count = 0;
     d = opendir(input_dir);
     if(d) {
