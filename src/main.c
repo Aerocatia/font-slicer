@@ -1,11 +1,18 @@
 // Font Slicer, by Aerocatia
 
-#include <dirent.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <libgen.h>
+#include <dirent.h>
+#include <sys/stat.h>
+
+#ifdef _WIN32
+#define MKDIR(path, mode) mkdir(path)
+#else
+#define MKDIR(path, mode) mkdir(path, mode)
+#endif
 
 enum signatures {
     TAG_HEADER_SIGNATURE = 0x626C616D, // 'blam'
@@ -266,6 +273,19 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     size_t pixel_data_offset = characters_offset + characters_count * sizeof(struct font_character);
     if(buffer_in_size != pixel_data_offset + pixel_data_size) {
         fprintf(stderr, "%s is fucked\n", tag_path);
+        return false;
+    }
+
+    // Check output directory exists, make it if not (parent must exist)
+    struct stat st = {0};
+    if(stat(output_dir, &st) == -1) {
+        if(MKDIR(output_dir, 0777) == -1) {
+            fprintf(stderr, "Error creating directory %s\n", output_dir);
+            return false;
+        }
+    }
+    else if(!S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "Output %s is not a valid directory path\n", output_dir);
         return false;
     }
 
