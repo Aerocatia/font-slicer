@@ -153,6 +153,7 @@ static uint32_t crc32(uint32_t crc, const void *buf, size_t size) {
     while(size--) {
         crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
     }
+
     return crc;
 }
 
@@ -212,7 +213,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     // Read into buffer
     buffer_in = malloc(buffer_in_size);
     if(!buffer_in) {
-        fprintf(stderr, "Could not allocate %zu bytes", buffer_in_size);
+        fprintf(stderr, "Could not allocate %zu bytes for input buffer", buffer_in_size);
         return false;
     }
 
@@ -303,6 +304,14 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         return false;
     }
 
+    // Output buffer
+    size_t buffer_out_size = 1 * 1024 * 1024;
+    uint8_t *buffer_out = malloc(buffer_out_size);
+    if(!buffer_out) {
+        fprintf(stderr, "Could not allocate %zu bytes for output buffer", buffer_out_size);
+        return false;
+    }
+
     // Go through each character and dump tag data + pixel data to a file
     static char output_path[512];
     static bool seen[UINT16_MAX] = {false};
@@ -313,6 +322,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
             fprintf(stderr, "Warning: skipped extracting duplicate character %u at index %d\n", character_type, i);
             continue;
         }
+
         seen[character_type] = true;
         snprintf(output_path, sizeof(output_path), "%s/%u.bin", output_dir, character_type);
         size_t pixels_size = calculate_pixels_size(byteswap16(character->bitmap_width), byteswap16(character->bitmap_height));
@@ -323,8 +333,13 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         }
 
         // Copy file data to save
-        uint8_t *buffer_out = calloc(sizeof(struct font_character) + pixels_size, 1);
-        size_t buffer_out_size = sizeof(struct font_character) + pixels_size;
+        size_t character_file_size = sizeof(struct font_character) + pixels_size;
+        if(character_file_size > buffer_out_size) {
+            fprintf(stderr, "Character %d is too large for output buffer\n", i);
+            return false;
+        }
+
+        memset(buffer_out, 0, character_file_size);
         struct font_character *character_out = (struct font_character *)buffer_out;
         *character_out = *character;
         if(pixels_size != 0) {
@@ -345,17 +360,17 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
             return false;
         }
 
-        if(fwrite(buffer_out, buffer_out_size, 1, file_out) != 1) {
-            fprintf(stderr, "Could not write %zu bytes to %s\n", buffer_out_size, output_path);
+        if(fwrite(buffer_out, character_file_size, 1, file_out) != 1) {
+            fprintf(stderr, "Could not write %zu bytes to %s\n", character_file_size, output_path);
             return false;
         }
 
         fclose(file_out);
-        free(buffer_out);
         character++;
     }
 
     free(buffer_in);
+    free(buffer_out);
     return true;
 }
 
@@ -555,6 +570,7 @@ int main(int argc, const char **argv) {
     if(!executable_path) {
         return 1;
     }
+
     char *executable = basename(executable_path);
     if(argc != 4) {
         error_usage:
