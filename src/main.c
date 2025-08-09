@@ -327,7 +327,12 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         size_t buffer_out_size = sizeof(struct font_character) + pixels_size;
         struct font_character *character_out = (struct font_character *)buffer_out;
         *character_out = *character;
-        memcpy(buffer_out + sizeof(struct font_character), buffer_in + pixels_offset, pixels_size);
+        if(pixels_size != 0) {
+            memcpy(buffer_out + sizeof(struct font_character), buffer_in + pixels_offset, pixels_size);
+        }
+        else {
+            fprintf(stderr, "Warning: character %d has no pixel data\n", i);
+        }
 
         // Clear stale pixel data offset
         character_out->pixels_offset = 0;
@@ -462,6 +467,9 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
 
             new_pixel_data_size += pixels_size;
         }
+        else {
+            fprintf(stderr, "Warning: character %u has no pixel data\n", character_files[i]);
+        }
 
         fclose(file_in);
 
@@ -570,6 +578,8 @@ int main(int argc, const char **argv) {
     else {
         goto error_usage;
     }
+
+    free(executable_path);
 
     return success ? 0 : 1;
 }
