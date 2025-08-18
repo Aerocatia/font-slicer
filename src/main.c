@@ -405,6 +405,12 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         return false;
     }
 
+    // Nothing to do if there are no characters
+    if(character_files_count == 0) {
+        fprintf(stderr, "No valid font characters were found in %s\n", input_dir);
+        return false;
+    }
+
     // Font characters should be stored from lowest to highest
     qsort(character_files, character_files_count, sizeof(uint16_t), compare_characters);
 
