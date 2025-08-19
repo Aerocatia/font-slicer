@@ -24,7 +24,7 @@ struct tag_header {
 	char pad1[36];
 	uint32_t tag_group;
 	uint32_t checksum;
-	uint32_t offset;
+	uint32_t offset; // offset to tag data, always 64
 	uint32_t size; // never set 😭
 	char pad2[4];
 	uint16_t version; // version of the tag
@@ -227,7 +227,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
 
     // Check if it's really a font tag
     struct tag_header *header = (struct tag_header *)buffer_in;
-    if(byteswap32(header->signature) != TAG_HEADER_SIGNATURE && byteswap32(header->tag_group) != FONT_SIGNATURE) {
+    if(byteswap32(header->signature) != TAG_HEADER_SIGNATURE || byteswap32(header->tag_group) != FONT_SIGNATURE) {
         fprintf(stderr, "%s is not a valid font tag\n", tag_path);
         return false;
     }
