@@ -1,6 +1,6 @@
 1 VERSIONINFO
-FILEVERSION      1,0,0,0
-PRODUCTVERSION   1,0,0,0
+FILEVERSION      1,0,1,0
+PRODUCTVERSION   1,0,1,0
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
@@ -9,12 +9,12 @@ BEGIN
             VALUE "Comments",         "Tool to do bad things to font tags"
             VALUE "CompanyName",      "<3"
             VALUE "FileDescription",  "Tool to do bad things to font tags"
-            VALUE "FileVersion",      "1.0.0"
+            VALUE "FileVersion",      "1.0.1"
             VALUE "InternalName",     "font-slicer"
             VALUE "OriginalFilename", "font-slicer.exe"
             VALUE "ProductName",      "Font Slicer"
-            VALUE "ProductVersion",   "1.0.0"
-            VALUE "LegalCopyright",   "\xA9 2025 Aerocatia"
+            VALUE "ProductVersion",   "1.0.1"
+            VALUE "LegalCopyright",   "\xA9 2026 Aerocatia"
         END
     END
     BLOCK "VarFileInfo"

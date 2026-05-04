@@ -4,14 +4,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libgen.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
 #ifdef _WIN32
-#define MKDIR(path, mode) mkdir(path)
+    #include <direct.h>
+    #define MKDIR(path, mode) _mkdir(path)
 #else
-#define MKDIR(path, mode) mkdir(path, mode)
+    #include <libgen.h>
+    #define MKDIR(path, mode) mkdir(path, mode)
 #endif
 
 enum signatures {
@@ -186,7 +187,7 @@ static int compare_characters(const void *a, const void *b) {
         return 1;
     }
 
-     return 0;
+    return 0;
 }
 
 static bool split_font_tag(const char *tag_path, const char *output_dir) {
@@ -266,7 +267,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
             return false;
         }
         struct font_character_tables_entry *character_tables = (struct font_character_tables_entry *)(buffer_in + font_tag_cursor);
-        for(int i = 0; i < character_tables_count; i++) {
+        for(uint32_t i = 0; i < character_tables_count; i++) {
             font_tag_cursor += byteswap32(character_tables->table.count) * sizeof(struct font_character_table_entry);
             character_tables++;
         }
@@ -316,10 +317,10 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
     static char output_path[512];
     static bool seen[UINT16_MAX] = {false};
     struct font_character *character = (struct font_character *)(buffer_in + characters_offset);
-    for(int i = 0; i < characters_count; i++) {
+    for(uint32_t i = 0; i < characters_count; i++) {
         uint16_t character_type = byteswap16(character->character);
         if(seen[character_type]) {
-            fprintf(stderr, "Warning: skipped extracting duplicate character %u at index %d\n", character_type, i);
+            fprintf(stderr, "Warning: skipped extracting duplicate character %u at index %u\n", character_type, i);
             continue;
         }
 
@@ -328,14 +329,14 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
         size_t pixels_size = calculate_pixels_size(byteswap16(character->bitmap_width), byteswap16(character->bitmap_height));
         size_t pixels_offset = pixel_data_offset + byteswap32(character->pixels_offset);
         if(pixels_size > pixel_data_size) {
-            fprintf(stderr, "Pixel data for character %d is out of bounds\n", i);
+            fprintf(stderr, "Pixel data for character %u is out of bounds\n", i);
             return false;
         }
 
         // Copy file data to save
         size_t character_file_size = sizeof(struct font_character) + pixels_size;
         if(character_file_size > buffer_out_size) {
-            fprintf(stderr, "Character %d is too large for output buffer\n", i);
+            fprintf(stderr, "Character %u is too large for output buffer\n", i);
             return false;
         }
 
@@ -346,7 +347,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
             memcpy(buffer_out + sizeof(struct font_character), buffer_in + pixels_offset, pixels_size);
         }
         else {
-            fprintf(stderr, "Warning: character %d has no pixel data\n", i);
+            fprintf(stderr, "Warning: character %u has no pixel data\n", i);
         }
 
         // Clear stale pixel data offset
@@ -371,6 +372,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
 
     free(buffer_in);
     free(buffer_out);
+
     return true;
 }
 
@@ -384,13 +386,21 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         while((dir = readdir(d)) != nullptr) {
             // Exclude "." and ".."
             if(strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
-                int file_value;
-                if(!sscanf(dir->d_name, "%d.bin", &file_value) == 1) {
+                size_t name_len = strlen(dir->d_name);
+                if(name_len > 9) {
+                    fprintf(stderr, "%s has too long of a name to be a valid character file\n", dir->d_name);
+                    return false;
+                }
+
+                int file_value, position;
+                auto result = sscanf(dir->d_name, "%d.bin%n", &file_value, &position);
+                if(result != 1 || (size_t)position != name_len) {
                     fprintf(stderr, "%s is not named with format <character number>.bin\n", dir->d_name);
                     return false;
                 }
+
                 if(file_value > UINT16_MAX || file_value < 0) {
-                    fprintf(stderr, "%s is out of bounds to be a valid font character\n", dir->d_name);
+                    fprintf(stderr, "%s is out of bounds to be a valid font character (must be 0-65535)\n", dir->d_name);
                     return false;
                 }
 
@@ -398,6 +408,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
                 character_files_count++;
             }
         }
+
         closedir(d);
     }
     else {
@@ -417,7 +428,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
     size_t new_pixel_data_size = 0;
     size_t pixel_data_buffer_size = 32 * 1024 * 1024;
     uint8_t *pixel_data_buffer = calloc(pixel_data_buffer_size, 1);
-    struct font_character *characters_buffer = calloc(sizeof(struct font_character), UINT16_MAX);
+    struct font_character *characters_buffer = calloc(UINT16_MAX, sizeof(struct font_character));
 
     if(!pixel_data_buffer || !characters_buffer) {
         fprintf(stderr, "Could not allocate pixel and character buffers\n");
@@ -433,7 +444,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         // Open
         FILE *file_in = nullptr;
         size_t file_in_size = 0;
-        snprintf(path_buffer, sizeof(path_buffer), "%s/%d.bin", input_dir, character_files[i]);
+        snprintf(path_buffer, sizeof(path_buffer), "%s/%u.bin", input_dir, character_files[i]);
         file_in = fopen(path_buffer, "rb");
         if(!file_in) {
             fprintf(stderr, "Failed to open %s\n", path_buffer);
@@ -568,19 +579,43 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
 
     fclose(file_out);
     free(new_tag_buffer);
+
     return true;
 }
 
-int main(int argc, const char **argv) {
-    char *executable_path = strdup(argv[0]);
-    if(!executable_path) {
-        return 1;
+static void executable_basename(const char *path, char *name_buffer, size_t name_buffer_size) {
+#ifdef _WIN32
+    static char exe_base[256];
+    static char exe_ext[256];
+    auto split = _splitpath_s(path, nullptr, 0, nullptr, 0, exe_base, sizeof(exe_base), exe_ext, sizeof(exe_ext));
+    if(split) {
+        snprintf(name_buffer, name_buffer_size, "font-slicer");
+        return;
     }
 
-    char *executable = basename(executable_path);
+    strncpy(name_buffer, exe_base, name_buffer_size);
+    strncat(name_buffer, exe_ext, name_buffer_size);
+#else
+    char *executable_path = strdup(path);
+    if(!executable_path) {
+        snprintf(name_buffer, name_buffer_size, "font-slicer");
+        return;
+    }
+
+    char *name = basename(executable_path);
+    strncpy(name_buffer, name, name_buffer_size);
+
+    free(executable_path);
+#endif
+}
+
+int main(int argc, const char **argv) {
     if(argc != 4) {
         error_usage:
-        printf("Usage: %s <command> <command args>\nCommands:\n    split <input tag> <output dir>\n    join  <input dir> <new tag path>\n",executable);
+        char executable_name[256];
+        executable_basename(argv[0], executable_name, sizeof(executable_name));
+        printf("Usage: %s <command> <command args>\nCommands:\n    split <input tag> <output dir>\n    join  <input dir> <new tag path>\n", executable_name);
+
         return 1;
     }
 
@@ -600,8 +635,6 @@ int main(int argc, const char **argv) {
     else {
         goto error_usage;
     }
-
-    free(executable_path);
 
     return success ? 0 : 1;
 }
