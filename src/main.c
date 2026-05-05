@@ -596,7 +596,7 @@ static void executable_basename(const char *path, char *name_buffer, size_t name
     }
 
     strncpy(name_buffer, exe_base, name_buffer_size);
-    strncat(name_buffer, exe_ext, name_buffer_size);
+    strncat(name_buffer, exe_ext, name_buffer_size - strnlen(name_buffer, name_buffer_size));
 #else
     char *executable_path = strdup(path);
     if(!executable_path) {
