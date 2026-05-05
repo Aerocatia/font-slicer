@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 
 project(FontSlicer
     VERSION 1.0.1
-    DESCRIPTION "Tool to do bad things to font tags"
+    DESCRIPTION "Does bad things to Halo CE font tags"
     LANGUAGES C
 )
 

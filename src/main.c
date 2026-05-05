@@ -266,6 +266,7 @@ static bool split_font_tag(const char *tag_path, const char *output_dir) {
             fprintf(stderr, "%s has character tables that are out of bounds\n", tag_path);
             return false;
         }
+
         struct font_character_tables_entry *character_tables = (struct font_character_tables_entry *)(buffer_in + font_tag_cursor);
         for(uint32_t i = 0; i < character_tables_count; i++) {
             font_tag_cursor += byteswap32(character_tables->table.count) * sizeof(struct font_character_table_entry);
@@ -512,6 +513,7 @@ static bool produce_font_tag_from_bullshit(const char *input_dir, const char *ou
         if(ascending_height > max_ascending_height) {
             max_ascending_height = ascending_height;
         }
+
         if(descending_height > max_descending_height) {
             max_descending_height = descending_height;
         }

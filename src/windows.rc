@@ -6,9 +6,9 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "Comments",         "Tool to do bad things to font tags"
+            VALUE "Comments",         "Does bad things to Halo CE font tags"
             VALUE "CompanyName",      "<3"
-            VALUE "FileDescription",  "Tool to do bad things to font tags"
+            VALUE "FileDescription",  "Does bad things to Halo CE font tags"
             VALUE "FileVersion",      "1.0.1"
             VALUE "InternalName",     "font-slicer"
             VALUE "OriginalFilename", "font-slicer.exe"
